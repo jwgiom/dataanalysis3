@@ -11,3 +11,23 @@ new<-W1 %>%
 head(new)
 
 
+new2<- subset(W1, select = c("pidp","a_hlht"))
+
+new3<-W1[,c(1,6:13)]
+
+
+women<-filter(W1,a_sex<18,a_sex>25)
+head(women)
+
+
+women<-W1%>%
+  filter(a_sex == 2 & a_dvage>=18 & a_dvage<=25)
+
+inbred<-W1%>%
+  filter((a_ukborn==3 |a_ukborn==4) & a_dvage>40)%>%
+  head(2)
+
+scot<-W1%>%
+  mutate(soctland = ifelse(a_ukborn==2, 1,0))
+
+?mutate()
