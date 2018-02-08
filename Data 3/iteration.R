@@ -220,6 +220,8 @@ W1mod2 <- W1mod %>%
 
 tapply(W1mod2$bmiover30, list(W1mod2$sex, W1mod2$agegr), mean, na.rm = TRUE)
 
+?tapply()
+
 # Exercise. Write a for loop replicating these results.
 # You will need to loop over the values of sex and agegr at the same time,
 # so you will need to use a nested loop.
@@ -229,11 +231,6 @@ attach(W1mod)
 for(i in c(a_sex & agegr)){
   y=get(i)
 }
-
-
-
-
-
 
 
 # Here is an example of a nested loop.
