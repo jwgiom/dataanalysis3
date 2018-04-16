@@ -1,0 +1,165 @@
+# Data visualisation {#datavis}
+
+> Pre-requisite for this class: ch.3 ("Data visualisation") from R for Data Science - http://r4ds.had.co.nz/data-visualisation.html
+
+At home you learned about the basic principles of data visualisation in R with the **ggplot2** package. Let us see how we can apply this to the Understanding Society data set.
+
+Personally I can never remember all the details of the ggplot2 syntax. I often use the ready-made "recipes" from the R Graphics Cookbook by W.Chang -- https://www.amazon.co.uk/R-Graphics-Cookbook-Winston-Chang/dp/1449316956/. The 2nd edition is coming out later this year -- https://www.amazon.co.uk/Graphics-Cookbook-2e-Winston-Chang/dp/1491978600 .
+
+You may also find Winston Chang's website useful (and not only for graphics) - http://www.cookbook-r.com .
+
+## Reading in the data
+
+First let us read in the data we used in week 2 when we learned about **dplyr** (a short version of the wave 1 data) and recreate the measures for weight, height and BMI.
+
+```{r cache = TRUE}
+library(tidyverse)
+library(data.table)
+W1 <- fread("exData/W1.csv")
+W1 <- W1 %>%
+  mutate(heightcm = ifelse(a_hlht == 1 & a_hlhtf > 0, 
+                           a_hlhtf*30.48 + a_hlhti*2.54,
+                           ifelse(a_hlht == 2 & a_hlhtc > 0, 
+                                  a_hlhtc, NA))) %>%
+  mutate(weightkg = ifelse(a_hlwt == 1 & a_hlwts > 0, 
+                           a_hlwts*6.35 + a_hlwtp*0.45,
+                           ifelse(a_hlwt == 2 & a_hlwtk > 0, 
+                                  a_hlwtk, NA))) %>%
+  mutate(bmi = weightkg / (heightcm / 100)^2)
+head(W1, 3)
+```
+
+## Visualising one quantitative variable
+
+**Exercise**. Visualise the distribution of the BMI with **ggplot2**. Which statistical graphs would be appropriate for this?
+
+
+### Histogram.
+
+```{r cache = TRUE}
+ggplot(W1, aes(x=bmi)) +
+  geom_histogram(bins = 100) +
+  xlab("Body mass index")
+```
+
+### Density chart.
+
+```{r cache = TRUE}
+ggplot(W1, aes(x=bmi)) +
+  geom_density() +
+  xlab("Body mass index")
+```
+
+
+## Visualising one categorical variable
+
+**Exercise**. Visualise the distribution of *a_ukborn* with **ggplot2**. Which statistical graphs would be appropriate for this?
+
+### Bar plot.
+
+```{r cache = TRUE}
+table(W1$a_ukborn)
+W1 <- W1 %>%
+  mutate(a_ukborn = ifelse(a_ukborn > 0, a_ukborn, NA)) %>%
+  mutate(cbirth = recode(a_ukborn, "1" = "England", 
+                         "2" = "Scotland",
+                         "3" = "Wales",
+                         "4" = "Northern Ireland",
+                         "5" = "Not UK")) 
+  
+table(W1$cbirth)
+W1 %>% 
+  filter(!is.na(cbirth)) %>%
+  ggplot(aes(x=cbirth)) +
+  geom_bar() +
+  xlab("Country of birth")
+
+table(W1$cbirth, useNA = "always")
+```
+
+## Visualising two quantitative variables
+
+**Exercise**. Visualise the joint distribution of weight (in kg) and height (in cm). In your chart show the regression line and the nonparametric smoothing line.
+
+```{r cache = TRUE}
+ggplot(W1, aes(x = weightkg, y= heightcm)) +
+  geom_point() +
+  geom_smooth() +
+  stat_smooth(method=lm)
+```
+
+## Visualising one categorical and one quantitative variable
+
+**Exercise**. Visualise the distribution of BMI for a) men and women, b) different age groups.
+
+```{r cache = TRUE}
+# Coding a categorical variable for age groups
+
+table(W1$a_dvage, useNA = "always")
+
+W1 <- W1 %>%
+        mutate(agegr = ifelse(a_dvage < 31, "16-30",
+                              ifelse(a_dvage > 30 & a_dvage < 46, "31-45",
+                                ifelse(a_dvage > 45 & a_dvage < 61, "46-60",
+                                       ">60")))) %>%
+        mutate(agegr = factor(agegr, c("16-30", "31-45", "46-60", ">60")))
+
+ggplot(W1, aes(x = agegr, y= bmi)) +
+  geom_boxplot() +
+  xlab("Age group") +
+  ylab("Body mass index")
+```
+
+## Visualising two categorical variables
+
+**Exercise**. Use facets to visualise the distribution of *a_ukborn* by age group.
+
+```{r cache = TRUE}
+W1 %>% 
+  filter(!is.na(cbirth)) %>%
+  ggplot(aes(x=cbirth)) +
+  geom_bar() +
+  xlab("Country of birth") +
+  facet_wrap(~ agegr)
+```
+
+Alternatively you can do a jitter plot, but in our case it wouldn't look nice. 
+
+```{r cache = TRUE}
+W1 %>% 
+  filter(!is.na(cbirth)) %>%
+  ggplot(aes(x=cbirth, y = agegr)) +
+  geom_jitter() +
+  xlab("Country of birth") +
+  ylab("Age group")
+```
+
+## Showing the relationships by group
+
+**Exercise**. Use facets to visualise the association between age and BMI by country of birth.
+
+```{r cache = TRUE}
+W1 %>%
+        filter(!is.na(cbirth)) %>%
+        ggplot(aes(x = a_dvage, y= bmi)) +
+                geom_point() +
+                geom_smooth() +
+                facet_wrap(~ cbirth)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

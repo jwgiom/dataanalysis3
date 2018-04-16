@@ -1,0 +1,381 @@
+---
+title: "RCourseworktestknit280318"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+  word_document: default
+---
+
+## Introduction to the Paper
+
+<!-- Start with a brief introduction. For political interest that would be approximately the following: Why are we interested in political interest? What happened in British politics between 2008 and 2016 that could affect the level of political interest? Maybe you can find and cite two or three papers that have already explored this topic. -->
+
+After reading a paper overseen by Professor Timothy Frayling of the University of Exeter, pertaining to an observable causal effect between height and BMI, and 5 measures of Socioeconomic status, I was interested to see if the Understanding society data set confirmed these findings.<!-- Then present your research questions. What are you aiming to achieve with your report? What questions will you answer? --> I am therefore going to try to answer the following question; Does the height of an individual have a causal effect on the level of their pay. Is any observed effect also observed equally between the sexes, or is there a disparity between the sexes. Is this a constant factor at all age groups?
+
+<!-- Present your statistical results. The structure of this part will depend on your results. This should not be just a collection of tables and graphs. Explain what you see in all those tables and graphs and why you have included them. -->
+
+<!-- Discussion. This is a very important part. You need to discuss here how the statistical results you have got contribute to our understanding of your topic (for example, political interest in Britain). Explain in substantive terms your results and discuss them. Why has political interest increased (or decresed, or ramained stable)? What factors contributed to this? -->
+
+<!-- The length of the report is 3,500 words, but I am not going to count your words and writing slightly more or slightly less is fine. Do not submit 100 pages. In the same way, if your report is obviously too short this is going to affect your mark. -->
+
+# Importing the Data
+
+Setting Working Directory
+Load Packages
+Import of data from all 7 waves into one set
+Mutation so all units are covered in one variable
+
+
+```{r, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(data.table)
+library(reshape2)
+library(dplyr)
+library(data.table)
+library(stargazer)
+
+
+```
+
+## Description of the Data Variables chosen
+
+<!-- Briefly describe the data (variables you are going to use, what waves they are coming from, etc.). -->
+In order to be able to confirm the findings of the previously published paper and be able to distinguish whether this effect is carried on between the sexes and the age groups present, I am going to need a number of variables. These variables are as follows;
+
+PIDP - or the "cross-wave person identifier (public release)", Sex, Height - made up of four individual variables that must be mutated to convert to Centimeters. These are as follows;
+       
+        hlht - Height unit ID
+        hlhtf - Height in Feet
+        hlhti - Height in Inches
+        hlhtc - Height in cm
+        
+I am also using Age and Pay - For the purposes  of this essay, I am using the variable w_fimnnet_dv, a multiple component variable of imputed personal net monethly income, post income tax.
+
+In the Understanding Society data set, these 5 variables are present within all 7 waves, so I am able to study whether any observed effects are present in a time period spanning 7 years.
+
+
+## Looped Functions to Import dataset
+
+```{r, message=FALSE, warning=FALSE}
+
+files <- dir("data/UKDA-6614-tab/tab",
+             pattern="indresp", recursive = TRUE, full.names=TRUE)
+
+files <- files[str_detect(files, "us")]
+
+vars <- c("pidp", "sex", "hlht", "hlhtf", "hlhti", "hlhtc", "fimnnet_dv","dvage")
+
+## Starter Loop
+
+
+for (i in 1:7) {
+        varsToSelect <- paste(letters[i], vars, sep = "_")
+        varsToSelect <- c("pidp", varsToSelect)
+        data <- fread(files[i], select = varsToSelect)
+        if (i == 1) {
+                all7 <- data  
+        }
+        else {
+                all7 <- full_join(all7, data, by = "pidp")
+        }}
+
+rm(files,i,vars,varsToSelect)
+
+```
+
+## Reforming the dataset
+
+```{r, message=FALSE, warning=FALSE}
+## Setting height variables to fit Centimetres
+
+all <- all7 %>%
+  mutate(heightcm = ifelse(a_hlht == 1 & a_hlhtf > 0, 
+                           a_hlhtf*30.48 + a_hlhti*2.54,
+                           ifelse(a_hlht == 2 & a_hlhtc > 0, 
+                                  a_hlhtc, NA))) 
+
+all$a_hlht<-NULL
+all$a_hlhtf<-NULL
+all$a_hlhti<-NULL
+all$a_hlhtc<-NULL
+
+rm(all7)
+
+## Reforming data from Wide format to Long
+
+all <- all %>%
+  gather(a_sex:g_dvage, key = "variable", value = "value") %>%
+  separate(variable, into = c("wave", "variable"), sep = "_") %>%
+  spread(key = variable, value = value)
+
+## Issuing number to count how many waves the PIDP appears in, with all measurements complete - also removing any negative income values
+
+data<- all[complete.cases(all),]
+a<-rle(sort(data$pidp))
+b <- data.frame(pidp=a$values, n=a$lengths)
+data<-data%>%
+  full_join(b, by = 'pidp')
+
+data <- data %>%
+  filter(fimnnet > 0)
+
+
+
+rm(a,b,all)
+```
+
+```{r}
+ # Finding the quantiles of height in the data set
+ 
+ Quantiles<-quantile(data$heightcm)
+
+```
+
+
+
+
+# Brief overview of data
+
+In order to be able to begin understanding the data set, it proves useful to study the overall look of the data set. Thus, in this first group of tables, I am illustrating the relationship between height and pay. I will split the data into waves in order to grasp an overview of the data.
+
+### Plot to show the relationship between Height and Income
+```{r,echo=TRUE}
+
+ggplot(data,aes(heightcm,fimnnet))+
+  geom_point(size=.05)+
+  geom_smooth(method = lm)+
+  xlab("Height in cm")+
+  ylab("Total net personal income - no deductions")+
+  facet_grid(. ~ wave)
+
+```
+As this group of Graphs shows, there is a reccuring trend of an increase of pay with an increase in height. This appears to remain at around the same proportion throughout all 7 waves.
+
+I am also interested in whether this trend occurs in both sexes. The below table shows the data above, split into the repsective gender of the respondee. The top row shows male respondees, whilst the bottom row shows female respondees.
+
+### Plot to show the relationship between Height and Income, split into the two sexes
+```{r}
+ggplot(data,aes(heightcm,fimnnet))+
+  geom_point(size=.05)+
+  geom_smooth(method = lm)+
+  xlab("Height in cm")+
+  ylab("Total net personal income - no deductions")+
+  facet_grid(sex ~ wave)
+```
+As this shows, while females tend to be shorter, the disparity in taller people and shorter people's pay levels continues throughout both sexes.
+
+It is also interesting to take a precursive look at the variables that are going to be studied, in order to gain a valid perspective of them. In the following group of tables, I will study the distribution of the Net Monthly income - before deductions, across all waves.
+
+### Plot to display the frequency of levels of Net Monthly Income within the Sample population
+
+```{r, echo=TRUE}
+ggplot(data, aes(x = fimnnet)) +
+  geom_density() +
+  xlab("Net monthly income") +
+  xlim(0, 5000) + 
+  ylab("Frequency of given income")+
+  facet_wrap(~ wave)
+```
+This collection of Graphs clearly shows that the most common income across all waves is approcimately £1000 per calendar month. It is interesting that there is a very small general increase in wages as the waves go on; this is due to the fact that the data set was begun in 2009 - just post economic crisis. The country has therefore seen a general increase in wealth, which is translated into an increase in the living wage. Note that I have excluded the very top range of the incomes - £15,000 PCM - as I believe it is not useful to include this and distort the figures in such a way that one cannot gather any understanding nor detail.
+
+### Plot to Display the distribution of Heights within the Sample population
+
+```{r}
+ggplot(data, aes(x = heightcm)) +
+  geom_density() +
+  xlab("Height distribution in Population in cm") +
+  xlim(95, 250) +
+  ylab("Frequency of given height")+
+  facet_wrap(~ wave)
+
+```
+This collection of Graphs shows that throughout the waves, the distribution of the hieghts within the population remains somewhat stable - this is to be expected, as height is a variable that will not alter too much. Thus, it is resonable to condense the 7 waves into one graph.
+
+```{r}
+ggplot(data, aes(x = heightcm)) +
+  geom_density() +
+  xlab("Height distribution in Population in cm") +
+  xlim(95, 250) +
+  ylab("Frequency of given height")+ 
+  geom_vline(xintercept=160.02)+ 
+  geom_vline(xintercept=175.26)+
+  geom_vline(xintercept=167.64)
+
+```
+
+The distribution itself is reminicsient of a normal distribution, in terms of the bell curve shape. It also shows that the min range of height is between ~150cm to ~190cm.
+
+## A graph to investigate the linearity of the data.
+
+However, just how linear is the data? As the graph below shows, the distribution of the values is more or less linear for the most common heights of ~150cm to ~190cm - this is illustrated by the similar shapes of both the linear regression line, in blue, and the non-parametric line, shown here in red. This is to be expected, as the extremes of the heights will always have more variation within, due to the smaller sample size at each ecnd of the scale. This is emphasised by the larger areas of uncertainty on the red non-parametric line. This graph is composed of data spanning all 7 waves.
+
+
+```{r}
+
+ggplot(data, aes(x = heightcm , y= fimnnet))+
+  xlab("Height in cm") +
+  ylab("Net monthly income") +
+  ylim(-500,16000)+
+  geom_smooth(method = lm)+
+  geom_smooth(col=2)
+
+```
+
+## A graph to investigate the linearity of the data in each individual wave
+In order to check if this is the case for each individual wave, the graph below is split into each separate wave.
+
+```{r}
+ggplot(data, aes(x = heightcm , y= fimnnet))+
+  xlab("Height in cm") +
+  ylab("Net monthly income") +
+  ylim(0,2500)+
+  geom_smooth(method = lm)+
+  geom_smooth(col=2)+
+  facet_grid(~wave)
+```
+Whilst this graph does no show as much detail as the previous graph, it is still relevent. It shows that the distribution of data in all 7 waves is very near to linear within the limits of the bell-curve of the population's height, which is equivalent ~150cm to ~190cm. Therefor, I conclude that the Linear regression model suitably describes the relationship. However, it must be said that for people shorter than 150cm and taller than 190cm, this model provides a really poor fit. 
+
+## Creation of Linear regression models
+
+Now that it is clear that the data is somewhat linear - I shall create linear regression models for each wave, so as to have an accurate grasp on whether the observed variance changes from year to year.
+
+### Regression for Wave 1
+```{r}
+
+
+wave1 <- data %>%
+  filter(wave == "a") 
+q1<-quantile(wave1$heightcm)
+
+m1 <- lm(fimnnet ~ heightcm, wave1)
+summary(m1)
+```
+
+### Regression for Wave 2
+```{r}
+
+wave2 <- data %>%
+  filter(wave == "b") 
+m2 <- lm(fimnnet ~ heightcm, wave2)
+summary(m2)
+```
+
+### Regression for Wave 3
+```{r}
+
+wave3 <- data %>%
+  filter(wave == "c") 
+m3 <- lm(fimnnet ~ heightcm, wave3)
+summary(m3)
+```
+
+### Regression for Wave 4
+```{r}
+
+wave4 <- data %>%
+  filter(wave == "d") 
+m4 <- lm(fimnnet ~ heightcm, wave4)
+summary(m4)
+```
+
+### Regression for Wave 5
+```{r}
+
+wave5 <- data %>%
+  filter(wave == "e") 
+m5 <- lm(fimnnet ~ heightcm, wave5)
+summary(m5)
+```
+
+### Regression for Wave 6
+```{r}
+
+wave6 <- data %>%
+  filter(wave == "f") 
+m6 <- lm(fimnnet ~ heightcm, wave6)
+summary(m6)
+```
+
+### Regression for Wave 7
+```{r}
+
+wave7 <- data %>%
+  filter(wave == "g") 
+m7 <- lm(fimnnet ~ heightcm, wave7)
+summary(m7)
+```
+
+```{r results = 'asis', message=TRUE, warning=TRUE}
+stargazer(m1,m2,m3,type = 'latex',title = "Regression Table for waves 1-3")
+```
+
+```{r results = 'asis', message=TRUE, warning=TRUE}
+stargazer(m4,m5,m6,type='latex',title = "Regression Table for waves 4-6")
+```
+
+```{r results = 'asis', message=TRUE, warning=TRUE}
+stargazer(m7,type='latex',title = "Regression Table for wave 7")
+```
+
+## Results of the Regressions
+
+  The first regression table generated by stargazer represents the values for waves 1-3. Column 1 represents Wave 1, and so on. The first row of this table is devoted to the effect that height has on a respondee's pay. In this case, it is therefore resonable to assume that a respondee who is 1cm taller than another respondee will be expected to earn £22.5219 more per month in wave 1, £22.2541 more per month in wave 2 and £23.5610 more per month in wave 3. Whilst these numbers sound inconsequential in the grand scheme of things, it is worth baring in mind that the vast majority of people fall within a bell curve of ~150cm to ~190cm - or about ±20cm from the mean population height of 168.83cm. It is therefore plausible to state that the concievable differences in pay are £900.876 per month for wave 1, £890.164 per month for wave 2 and £942.44 per month for wave 3, as one person can be anywhere up to 40cm taller than another and still remain within the nornak distrubution .
+
+  This is repeated throughout the next two tables, showing waves 4-6 and wave 7 respectively. Wave 4 has a £24.3313 increase for every 1cm, Wave 5 has a £24.8539 increase and Wave 6 has an increase of £29.0554 per centimetre. Wave 7 follows the trend, with an increase of £29.0814 per month, per extra centimetre. If one was to use the same assumption from the first three waves, of a 40cm possible height difference in the market, the figures would be as follows: Wave 4 could see a difference of up to £973.252, Wave 5 could see up to £994.156, Wave 6 can see a difference of £1162.216 and Wave 7 has the possiblity of a disparity of £1163.256.
+
+1 0.03258
+
+2 0.02635 
+
+3 0.03071 
+
+4 0.03179 
+
+5 0.03537
+
+6 0.04634
+
+7 0.04687
+
+
+The next thing that the tables reveal is the Adjusted R-Squared coefficient. For Wave 1, the coefficient is approximately 0.03258. This suggests that the height can account for roughly 3.3% of the variance seen within the level of pay that a respondee recieves. This low Adjusted R-squared coefficient is refleceted throughout all waves, with wave 2 recieving an Adjusted R-Squared coefficient of 0.02635, equating to just over 2.6%, wave 3 explaining just under 3.1% of the exhibited variance, wave 4 explaining 3.2% of observed varience and wave 5's coefficient showing that height can only account for 3.5% of variance. Waves 6 and 7  Thus, it is clear that the height of a respondee does not hold too much wieght over how much they are paid; I posit that it is merely an indicator 
+
+
+
+
+
+
+# Longitudinal analysis
+
+```{r}
+
+data <- data %>%
+  mutate(year = dplyr::recode(wave, "a" = "2009",
+                       "b" = "2010",
+                       "c" = "2011",
+                       "d" = "2012",
+                       "e" = "2013",
+                       "f" = "2014",
+                       "g" = "2015")) %>%
+  mutate(year = as.numeric(year))
+
+data %>%
+    group_by(year) %>%
+    summarise(
+      meanI = mean(fimnnet, na.rm = TRUE)
+    ) %>%
+    ggplot(aes(x = year, y = meanI)) +
+    geom_point() +
+    geom_line()
+
+
+
+
+
+
+
+sums<- as.vector(22.5219",22.2541,23.5610,24.3313,24.8539,29.0554,29.0814)*20
+
+```
